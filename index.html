@@ -381,7 +381,15 @@ main{ flex:1; padding:2px 18px 12px; }
 }
 .q-card .q-meaning{ font-size:20px; font-weight:700; font-family:'Noto Serif',serif; color:var(--text);}
 .q-card .q-pos{ font-size:12px; color:var(--text-muted); margin-top:6px;}
+.q-card .q-example-en{ font-size:14px; color:var(--text-muted); margin-top:14px; font-style:italic; line-height:1.4;}
 .q-card .q-hint{ font-size:13px; color:var(--gold); margin-top:10px; font-style:italic;}
+.hint-btn{
+  display:inline-flex; align-items:center; gap:6px; margin-top:12px;
+  background:none; border:1px solid var(--gold); color:var(--gold);
+  border-radius:999px; padding:6px 14px; font-size:13px; font-weight:600; cursor:pointer;
+}
+.hint-btn:active{ opacity:.7; }
+.q-card .q-hint-pinyin{ font-size:14px; color:var(--gold); margin-top:8px; }
 .q-feedback{
   font-size:14px; font-weight:700; min-height:0; margin-top:0;
   max-height:0; opacity:0; overflow:hidden;
@@ -1700,7 +1708,7 @@ function renderLevel() {
   const mcqHint = mcqProg && mcqProg.idx > 0 && mcqProg.idx < words.length
     ? `On question ${mcqProg.idx + 1}/${words.length}` : `Choose the correct Chinese character by meaning`;
   const typeHint = typeProg && typeProg.idx > 0 && typeProg.idx < words.length
-    ? `On question ${typeProg.idx + 1}/${words.length}` : `Type the Chinese character from its meaning & pinyin`;
+    ? `On question ${typeProg.idx + 1}/${words.length}` : `Type the Chinese character from its meaning · tap for a hint`;
 
   const playlistUrl = (window.HSK_PLAYLISTS && window.HSK_PLAYLISTS[String(lv)]) || '';
   const playlistHtml = playlistUrl ? `
@@ -2053,7 +2061,7 @@ function renderType() {
   if (q.idx >= q.words.length) return go('result');
   const w = q.words[q.idx];
   const answered = !!q.answered;
-  if (q._timerIdx !== q.idx) { q._qStart = Date.now(); q._timerIdx = q.idx; }
+  if (q._timerIdx !== q.idx) { q._qStart = Date.now(); q._timerIdx = q.idx; q._hintShown = false; }
 
   mainEl.innerHTML = `
     <div class="quiz-top">
@@ -2063,6 +2071,11 @@ function renderType() {
     <div class="q-card">
       <div class="q-meaning">${w.meaning}</div>
       <div class="q-pos">${w.pos || ''} ${w.bai ? '· HSK ' + w.level + ' · Lesson ' + w.bai : ''}</div>
+      ${w.meaning_ex ? `<div class="q-example-en">"${w.meaning_ex}"</div>` : ''}
+      ${!answered ? `
+        <button class="hint-btn" id="hint-btn">${q._hintShown ? '🙈 Hide hint' : '💡 Show hint'}</button>
+        ${q._hintShown && w.pinyin ? `<div class="q-hint-pinyin">${w.pinyin}</div>` : ''}
+      ` : ''}
       <div class="stamp-overlay ${answered ? 'show' + (q.lastCorrect ? '' : ' wrong') : ''}" id="stamp"><div class="stamp-ring">${answered && q.lastCorrect === false ? '×' : '对'}</div></div>
     </div>
     <div class="type-wrap">
@@ -2070,13 +2083,22 @@ function renderType() {
       <div class="type-feedback ${answered ? (q.lastCorrect ? 'ok' : 'bad') : ''}" id="type-feedback">${answered ? (q.lastCorrect ? `${escapeHtml(praiseMsg())} 对` : `${escapeHtml(encourageMsg())} Answer: ${w.word}${w.word_pinyin ? ` <em>(${w.word_pinyin})</em>` : ''}`) : ''}</div>
       <div class="type-actions">
         ${!answered ? `
-          <button class="nav-btn primary" id="check-btn" style="width:100%;">Check</button>
+          <button class="nav-btn primary" id="check-btn" style="flex:1;">Check</button>
+          <button class="nav-btn" id="dontknow-btn" style="flex:1;">Don't know</button>
         ` : `
           <button class="nav-btn primary" id="next-btn" style="flex:1;">Next question ›</button>
         `}
       </div>
     </div>
   `;
+
+  const hintBtn = document.getElementById('hint-btn');
+  if (hintBtn) {
+    hintBtn.onclick = () => {
+      q._hintShown = !q._hintShown;
+      renderType();
+    };
+  }
 
   const input = document.getElementById('type-input');
   if (!answered) input.focus();
@@ -2115,8 +2137,20 @@ function renderType() {
       renderType();
     }
     document.getElementById('check-btn').onclick = submit;
+    document.getElementById('dontknow-btn').onclick = () => {
+      q.answered = true;
+      q.lastCorrect = false;
+      q.lastInput = '';
+      const elapsed = Date.now() - (q._qStart || Date.now());
+      (q.times = q.times || []).push(elapsed);
+      q.wrong.push(w);
+      incrementWrong(w.id);
+      speak(speechTextFor(w), audioPathFor(w, false));
+      markDailyTouch(w.id);
+      renderType();
+    };
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') submit();
+      if (e.key === 'Enter') { e.stopPropagation(); submit(); }
     });
   } else {
     // Advancing must happen synchronously inside this tap handler (no setTimeout)
@@ -2356,7 +2390,7 @@ function renderStarred() {
       </div>
       <div class="mode-card" id="starred-type" ${filtered.length === 0 ? 'style="opacity:.5;pointer-events:none;"' : ''}>
         <div class="m-icon">写</div>
-        <div class="m-txt"><b>Typing</b><span>Type the Chinese character from the meaning & pinyin</span></div>
+        <div class="m-txt"><b>Typing</b><span>Type the Chinese character from the meaning · tap for a hint</span></div>
         <div class="m-arrow">›</div>
       </div>
     </div>
