@@ -1840,6 +1840,7 @@ function startMode(mode) {
 
 /* ===================== STUDY (flashcards) ===================== */
 let flipped = false;
+let lastStudySpokenId = null;
 function renderStudy() {
   const words = state.level ? wordsFor(state.level, state.bai) : (state.studyWords || []);
   const idx = Math.max(0, Math.min(state.cardIdx, words.length - 1));
@@ -1850,6 +1851,10 @@ function renderStudy() {
   const pct = Math.round(((idx + 1) / words.length) * 100);
   markSeen(w.id);
   markDailyTouch(w.id);
+  if (!flipped && lastStudySpokenId !== w.id) {
+    lastStudySpokenId = w.id;
+    speak(speechTextFor(w), audioPathFor(w, false));
+  }
 
   mainEl.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--text-muted);margin-bottom:2px;">
