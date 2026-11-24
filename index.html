@@ -680,6 +680,22 @@ html.dark-mode .brand-footer:active{ background:rgba(255,255,255,0.06); }
 .playlist-btn .pb-txt{ flex:1; }
 .playlist-btn .pb-sub{ display:block; font-size:11px; color:var(--text-muted); font-weight:400; margin-top:1px; }
 
+/* ---------- Book 1 / Book 2 selector ---------- */
+.vol-tabs{
+  display:flex; gap:6px; margin:14px 2px 0; padding:4px;
+  background:rgba(255,255,255,0.5); border:1px solid var(--line); border-radius:14px;
+}
+html.dark-mode .vol-tabs{ background:rgba(255,255,255,0.06); }
+.vol-tab{
+  flex:1; text-align:center; padding:10px 8px; border-radius:11px;
+  font-size:13.5px; font-weight:600; color:var(--text); cursor:pointer;
+}
+.vol-tab small{ display:block; font-size:11px; font-weight:400; color:var(--text-muted); margin-top:1px; }
+.vol-tab.active{ background:var(--accent-dark); color:#fff; }
+.vol-tab.active small{ color:rgba(255,255,255,0.85); }
+.chip-row.wrap{ flex-wrap:wrap; overflow-x:visible; }
+.chip-row.wrap .chip{ min-width:76px; text-align:center; padding:10px 14px; }
+
 .resume-cta{
   display:flex; align-items:center; gap:12px; width:100%;
   margin:10px 0 0;
@@ -720,16 +736,26 @@ window.HSK_LOGO_72 = "iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAIAAADajyQQAAAk10lEQVR42r
    - Cấp nào ĐÃ có playlist: dán link đầy đủ vào giữa hai dấu ngoặc kép "".
    - Cấp nào CHƯA có video: để nguyên chuỗi rỗng "" — nút xem playlist sẽ
      tự động ẩn đi trên web, không cần xoá hay sửa gì thêm.
+   - Cấp có 2 quyển (Thượng/Hạ): dùng dạng { "Thượng": "link", "Hạ": "link" }
+     và khai báo bài cuối của quyển Thượng trong HSK_VOLUME_SPLIT bên dưới.
    - Sửa xong lưu lại là dùng được ngay, không ảnh hưởng đến phần code khác.
 ============================================================================ */
 window.HSK_PLAYLISTS = {
   "1": "",
   "2": "",
   "3": "https://www.youtube.com/playlist?list=PLJK2yujSIAM8",
-  "4": "https://www.youtube.com/playlist?list=PLaVPvDSciUmE",
-  "5": "https://www.youtube.com/playlist?list=PLXcMeIZhEOsA",
+  "4": {
+    "Thượng": "https://www.youtube.com/playlist?list=PLaVPvDSciUmE",
+    "Hạ": "https://youtube.com/playlist?list=PLdK_Apgssq94"
+  },
+  "5": {
+    "Thượng": "https://www.youtube.com/playlist?list=PLXcMeIZhEOsA",
+    "Hạ": "https://youtube.com/playlist?list=PLVcrnqdAAw84"
+  },
   "6": ""
 };
+/* Last lesson of Book 1 (Thượng); later lessons belong to Book 2 (Hạ) */
+window.HSK_VOLUME_SPLIT = { "4": 10, "5": 18 };
 
 /* ============================================================================
    NƠI CHỨA FILE ÂM THANH (AUDIO) — nếu để ở repo riêng
@@ -1690,9 +1716,26 @@ function renderHome() {
 /* ===================== LEVEL DETAIL ===================== */
 function renderLevel() {
   const lv = state.level;
-  const lessons = lessonsInLevel(lv);
+  const allLessons = lessonsInLevel(lv);
   const words = wordsFor(lv, state.bai);
   const seenSetForChips = getSeenSet();
+  const split = window.HSK_VOLUME_SPLIT && window.HSK_VOLUME_SPLIT[String(lv)];
+  const pl = window.HSK_PLAYLISTS && window.HSK_PLAYLISTS[String(lv)];
+  const hasVolumes = !!(split && pl && typeof pl === 'object');
+  const curVol = hasVolumes ? (state.bai <= split ? 'Thượng' : 'Hạ') : '';
+  const volName = v => v === 'Thượng' ? 'Book 1' : 'Book 2';
+  const lessons = hasVolumes
+    ? allLessons.filter(b => curVol === 'Thượng' ? b <= split : b > split)
+    : allLessons;
+  let volTabs = '';
+  if (hasVolumes) {
+    const up = allLessons.filter(b => b <= split), dn = allLessons.filter(b => b > split);
+    const rng = a => a.length ? `Lessons ${a[0]}–${a[a.length - 1]}` : '';
+    volTabs = `<div class="vol-tabs">
+      <div class="vol-tab ${curVol === 'Thượng' ? 'active' : ''}" data-first="${up[0]}">Book 1<small>${rng(up)}</small></div>
+      <div class="vol-tab ${curVol === 'Hạ' ? 'active' : ''}" data-first="${dn[0]}">Book 2<small>${rng(dn)}</small></div>
+    </div>`;
+  }
   let chips = '';
   lessons.forEach(b => {
     const bWords = wordsFor(lv, b);
@@ -1710,20 +1753,22 @@ function renderLevel() {
   const typeHint = typeProg && typeProg.idx > 0 && typeProg.idx < words.length
     ? `On question ${typeProg.idx + 1}/${words.length}` : `Type the Chinese character from its meaning · tap for a hint`;
 
-  const playlistUrl = (window.HSK_PLAYLISTS && window.HSK_PLAYLISTS[String(lv)]) || '';
+  const playlistUrl = (hasVolumes ? pl[curVol] : pl) || '';
+  const volLabel = hasVolumes ? ` · ${volName(curVol)}` : '';
   const playlistHtml = playlistUrl ? `
     <a class="playlist-btn" href="${playlistUrl}" target="_blank" rel="noopener">
       <span class="pb-icon">▶</span>
-      <span class="pb-txt">HSK ${lv} Lesson Videos<span class="pb-sub">Original dialogue &amp; lesson videos on YouTube</span></span>
+      <span class="pb-txt">HSK ${lv}${volLabel} Lesson Videos<span class="pb-sub">Original dialogue &amp; lesson videos on YouTube</span></span>
     </a>` : '';
 
   mainEl.innerHTML = `
     <div class="level-title">
       <div class="num">HSK ${lv}</div>
-      <div class="meta">${levelWords(lv).length} words · ${lessons.length} lessons</div>
+      <div class="meta">${levelWords(lv).length} words · ${allLessons.length} lessons</div>
     </div>
+    ${volTabs}
     ${playlistHtml}
-    <div class="chip-row" id="chip-row">${chips}</div>
+    <div class="chip-row ${hasVolumes ? 'wrap' : ''}" id="chip-row">${chips}</div>
     <div class="mode-list">
       <div class="mode-card" data-mode="study">
         <div class="m-icon">卡</div>
@@ -1752,6 +1797,9 @@ function renderLevel() {
     chip.onclick = () => {
       go('level', { level: lv, bai: Number(chip.dataset.bai) });
     };
+  });
+  mainEl.querySelectorAll('.vol-tab').forEach(tab => {
+    tab.onclick = () => go('level', { level: lv, bai: Number(tab.dataset.first) });
   });
   const activeChip = document.querySelector('#chip-row .chip.active');
   if (activeChip) activeChip.scrollIntoView({ block: 'nearest', inline: 'center' });
